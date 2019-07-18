@@ -1,0 +1,46 @@
+function run-native($command) { & $command ($args -replace'(\\*)"','$1$1\"') }
+#$region ="us-west-2"
+$count=${count}
+$slots=@()
+while ($count -gt 0){
+    $slots+="${slot_family}-slot-{0}" -f $count
+    $count--
+}
+
+foreach ($slot in $slots) 
+{
+    $j = @{
+        ComponentName = @{
+            S="$slot"
+            }
+        }
+    $keyjson = ConvertTo-Json $j
+    $output =  run-native aws dynamodb get-item `
+        --table-name "${slot_family}-slot_table" --region ${aws_region} `
+        --key $keyjson `
+        --projection-expression "SlotFamily, cv" --profile ${aws_profile}
+    
+    if( -not $output) 
+    {      
+        #use powershell to build JSON
+        $j = @{
+            ComponentName = @{
+                S="$slot"
+            }
+            SlotFamily = @{
+            S="${slot_family}-slot"
+            }
+            cv = @{
+                N="0"
+            }
+        }
+        $itemjson = ConvertTo-Json $j
+
+        run-native aws dynamodb put-item `
+        --table-name "${slot_family}-slot_table"  --region ${aws_region} `
+        --item $itemjson `
+        --return-values ALL_OLD `
+        --profile ${aws_profile}
+    }
+
+}
